@@ -1,11 +1,11 @@
 // ==========================================
-// Task 2: 动态控制 (最终修正版 - UI微调)
+// Task 2: 动态控制 (带中间倒计时)
 // ==========================================
 
 // --- 阶段状态定义 ---
 const T2_PHASE_IDLE = 0;
 const T2_PHASE_RISE = 1;  // 0-8秒: 渐强
-const T2_PHASE_REST = 2;  // 8-10秒: 休息
+const T2_PHASE_REST = 2;  // 8-10秒: 休息 (2秒倒计时)
 const T2_PHASE_FALL = 3;  // 10-18秒: 渐弱
 const T2_PHASE_DONE = 4;
 const T2_PHASE_FAIL = 5;  // 失败状态
@@ -29,7 +29,7 @@ const T2_TOLERANCE = 150;
 // 颜色定义
 const C_GRADIENT_LOW  = '#d2d8cd'; // 灰绿
 const C_GRADIENT_HIGH = '#a4f76a'; // 亮绿
-const C_GUIDE_LINE    = '#a4f76a'; // [修改] 引导线颜色改成亮绿
+const C_GUIDE_LINE    = '#a4f76a'; // 引导线颜色
 
 function drawTask2_Dynamics() {
   drawBackButton(); 
@@ -83,7 +83,7 @@ function drawTask2_Dynamics() {
     }
   } 
   else if (t2State === T2_PHASE_REST) {
-    isActive = false; 
+    isActive = false; // 休息阶段不检测失败
     t2LocalTimer += deltaTime / 1000.0;
     targetP = 0; 
     if (t2LocalTimer >= T2_REST_TIME) {
@@ -227,7 +227,6 @@ function drawTask2_Dynamics() {
       guideY_Bot = centerY + h;
     }
 
-    // [修改] 线条颜色 C_GUIDE_LINE (#a4f76a)
     stroke(C_GUIDE_LINE); strokeWeight(3);
     line(guideX, guideY_Top, guideX, guideY_Bot);
     
@@ -240,6 +239,7 @@ function drawTask2_Dynamics() {
   // ============================
   // 4. 状态叠加文字 (半透明)
   // ============================
+  // 【新增】中间倒计时逻辑放在这里
   if (t2State === T2_PHASE_DONE || t2State === T2_PHASE_FAIL) {
     push();
     textAlign(CENTER, CENTER); textSize(100); textStyle(BOLD); noStroke();
@@ -251,6 +251,22 @@ function drawTask2_Dynamics() {
       fill(200, 0, 0, 50); 
       text("任务失败", xStart + chartW/2, centerY);
     }
+    pop();
+  } 
+  else if (t2State === T2_PHASE_REST) {
+    // === 这里是新增的倒计时代码 ===
+    let restTime = ceil(T2_REST_TIME - t2LocalTimer); // 计算剩余秒数 (2, 1)
+    
+    push();
+    textAlign(CENTER, CENTER); noStroke();
+    
+    // 倒计时数字
+    textSize(140); textStyle(BOLD); fill(0, 100); // 半透明黑色
+    text(restTime, xStart + chartW/2, centerY - 20);
+    
+    // 辅助提示文字
+    textSize(32); textStyle(NORMAL); fill(0, 150);
+    text("准备减弱...", xStart + chartW/2, centerY + 80);
     pop();
   }
 
@@ -287,10 +303,10 @@ function drawT2RightPanel(x, y, centerY) {
   // 2. 倒计时数字
   let displayTime = "8s"; 
   if (t2State === T2_PHASE_RISE) displayTime = ceil(8 - t2LocalTimer) + "s";
-  else if (t2State === T2_PHASE_REST) displayTime = "-";
+  else if (t2State === T2_PHASE_REST) displayTime = "-"; // 中间态右侧显示横杠
   else if (t2State === T2_PHASE_FALL) displayTime = ceil(8 - t2LocalTimer) + "s";
   else if (t2State === T2_PHASE_DONE) displayTime = "OK";
-  else if (t2State === T2_PHASE_FAIL) displayTime = "-"; // [修改] 去掉感叹号，改为空或横杠
+  else if (t2State === T2_PHASE_FAIL) displayTime = "-"; 
   
   noStroke(); fill(80); textSize(90); textStyle(BOLD); textAlign(CENTER, TOP);
   text(displayTime, x + barW / 2, y + barH + 60);
@@ -302,11 +318,13 @@ function drawT2RightPanel(x, y, centerY) {
   if (t2State === T2_PHASE_IDLE) {
     text("请吹气开始。\n目标：控制力度填\n充绿色区域。", x, txtY);
   } else if (t2State === T2_PHASE_FAIL) {
-    fill(0); // [修改] 失败文字改成黑色，原先是红色
+    fill(0); 
     text(`任务失败：\n${t2FailReason}\n\n再次吹气\n重新开始。`, x, txtY);
   } else if (t2State === T2_PHASE_DONE) {
     fill(0, 150, 0);
     text("任务完成！\n呼吸控制非常完美。\n\n再次吹气\n重新开始。", x, txtY);
+  } else if (t2State === T2_PHASE_REST) {
+    text("保持准备...\n即将开始减弱\n力度控制。", x, txtY);
   } else {
     text("请在8秒内完成吹\n气力度由弱至强的\n过渡，紧接着用8\n秒完成由强至弱的\n过渡。", x, txtY);
   }
