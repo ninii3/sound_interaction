@@ -5,6 +5,7 @@ let mic;
 let sensorP = 0; // 气压值 (0-600)
 let connectBtn;
 let isSystemActive = false; 
+let socket;
 
 
 let currentState = "MENU"; 
@@ -22,6 +23,7 @@ const MAX_SENSOR_VAL = 600;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  socket = io('http://localhost:8081');
   
 
   port = createSerial();
@@ -105,44 +107,52 @@ function draw() {
   drawDebugInfo();           
 }
 // 如果发现气柱抖动，这里可以调整平滑系数
+
 function updateSensorData() {
   if (!isSystemActive) {
     sensorP = 0;
     return;
   }
 
-  let targetP = sensorP; 
+  let rawVal = null; // 用于暂时存储从串口拿到的“最新”原始值
 
-  // 1. 获取目标值 (Arduino 或 Mic)
+  // 获取目标值 (Arduino)
   if (port.opened()) {
-    if (port.available() > 0) {
-      let str = port.readUntil("\n"); 
+    while (port.available() > 0) {
+      let str = port.readUntil("\n");
       if (str.length > 0) {
         let parts = split(str.trim(), " ");
         if (parts.length >= 2) {
-          let val = int(parts[1]);
-          // 只有当读取到的真的是数字时，才更新
-          if (!isNaN(val)) {
-            sensorP = val;
-          }
+           let v = int(parts[1]);
+           if (!isNaN(v)) rawVal = v; 
         }
       }
     }
-  } else {
-    // 麦克风模拟逻辑
+
+  } 
+
+  let targetP = sensorP; // 默认目标是当前值
+
+  // 确定目标值：如果有读到新数据，就用新的；否则保持不变
+  if (port.opened() && rawVal !== null) {
+    targetP = rawVal;
+  } else if (!port.opened()) {
+    // 麦克风逻辑 (保持不变)
     let vol = 0;
     if (mic) { try { vol = mic.getLevel(); } catch(e) {} }
     targetP = map(vol, 0.0, 0.2, 0, MAX_SENSOR_VAL); 
   }
 
-  // 2. 统一对 Arduino 和 Mic 进行平滑处理 (防止气柱抖动)
-  // 0.2 是平滑系数，如果觉得 Arduino 反应慢了，可以改成 0.5 或更高
+  // 2. 平滑处理 
+  // 解决了积压问题后，这个 0.2 的平滑系数会让气柱看起来顺滑但不延迟
   sensorP = lerp(sensorP, constrain(targetP, 0, MAX_SENSOR_VAL), 0.2);
   
-  // 3. 归零处理（当传感器读数小于某个阈值（比如 5）时，强制将其视为 0。）
+  // 3. 归零处理
   if (sensorP < 5) sensorP = 0; 
+  if (socket && isSystemActive) {
+      socket.emit('breath', sensorP);
+  }
 }
-
 function resetTask() {
   taskTimer = 0;
   isTaskComplete = false;
