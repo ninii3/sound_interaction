@@ -119,8 +119,13 @@ function updateSensorData() {
       let str = port.readUntil("\n"); 
       if (str.length > 0) {
         let parts = split(str.trim(), " ");
-        // 读取 Arduino 原始数据作为目标
-        if (parts.length >= 2) targetP = int(parts[1]); 
+        if (parts.length >= 2) {
+          let val = int(parts[1]);
+          // 只有当读取到的真的是数字时，才更新
+          if (!isNaN(val)) {
+            sensorP = val;
+          }
+        }
       }
     }
   } else {
